@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+const origin='http://127.0.0.1:5173';
+async function call(path,body,headers={}){const r=await fetch(origin+path,{method:body?'POST':'GET',headers:{Cookie:'__sites_local_auth=1',Origin:origin,'Content-Type':'application/json',...headers},body:body?JSON.stringify(body):undefined,redirect:'manual'});const raw=await r.text();let data;try{data=JSON.parse(raw)}catch{data=raw}return {r,data};}
+let x=await call('/api/broker/deriv');assert.equal(x.r.status,200);assert.equal(x.data.connected,false);assert.equal(x.data.clientId,'34yT57Zy0lRkynRr2Eykj');
+x=await call('/api/broker/deriv',{action:'connect'});assert.equal(x.r.status,200);assert.equal(new URL(x.data.url).searchParams.get('client_id'),'34yT57Zy0lRkynRr2Eykj');
+x=await call('/api/broker/deriv',{action:'configure',clientId:'local-test-oauth'},{Origin:'https://evil.test'});assert([400,403].includes(x.r.status));
+x=await call('/api/broker/deriv',{action:'configure',clientId:'local-test-oauth'});assert.equal(x.data.saved,true);
+x=await call('/api/broker/deriv',{action:'connect'});assert.equal(x.r.status,200);const u=new URL(x.data.url);assert.equal(u.origin,'https://auth.deriv.com');assert.equal(u.searchParams.get('client_id'),'local-test-oauth');assert.equal(u.searchParams.get('scope'),'trade');assert.equal(u.searchParams.get('code_challenge_method'),'S256');assert.equal(u.searchParams.get('redirect_uri'),origin+'/api/broker/deriv/callback');
+x=await call('/api/broker/deriv/callback?state=wrong&code=not-a-code');assert.equal(x.r.status,303);const failed=new URL(x.r.headers.get('location'),origin);assert.equal(failed.searchParams.get('deriv'),'failed');assert.equal(failed.searchParams.get('reason'),'state');assert.match(failed.searchParams.get('ref'),/^[a-f0-9-]{36}$/);assert(!failed.href.includes('not-a-code'));
+x=await call('/api/broker/deriv/callback?error=access_denied&error_description=secret-value');const denied=new URL(x.r.headers.get('location'),origin);assert.equal(denied.searchParams.get('reason'),'access_denied');assert(!denied.href.includes('secret-value'));
+x=await call('/api/broker/deriv',{action:'demo-session',accountId:'REAL_ACCOUNT'});assert.equal(x.r.status,400);
+x=await call('/api/broker/mt5',{action:'pair'});assert.equal(x.r.status,200);const token=x.data.token;
+const snapshot={login:'123456',server:'LocalTest-Demo',mode:'demo',currency:'USD',balance:10000,equity:10000,marginFree:10000,positions:0,symbol:'EURUSD',status:'Test heartbeat'};
+x=await call('/api/broker/mt5/heartbeat',snapshot,{Authorization:'Bearer '+token,Cookie:''});assert.equal(x.data,'PAUSED');
+x=await call('/api/broker/mt5',{action:'enable-demo'});assert.equal(x.data.saved,true);
+x=await call('/api/broker/mt5/heartbeat',snapshot,{Authorization:'Bearer '+token,Cookie:''});assert.equal(x.data,'DEMO');
+x=await call('/api/broker/mt5/heartbeat',{...snapshot,login:'999'},{Authorization:'Bearer '+token,Cookie:''});assert.equal(x.r.status,401);
+x=await call('/api/broker/mt5/heartbeat',{...snapshot,mode:'real'},{Authorization:'Bearer '+token,Cookie:''});assert.equal(x.data,'PAUSED');
+x=await call('/api/broker/mt5',{action:'enable-demo'});assert.equal(x.r.status,400);
+x=await call('/api/broker/mt5');assert.equal(x.data.snapshot.mode,'real');assert.equal(x.data.online,true);assert(!JSON.stringify(x.data).includes(token));
+x=await call('/api/broker/mt5',{action:'disconnect'});assert.equal(x.data.disconnected,true);
+x=await call('/api/broker/mt5/heartbeat',snapshot,{Authorization:'Bearer '+token,Cookie:''});assert.equal(x.r.status,401);
+x=await call('/api/broker/deriv',{action:'disconnect'});assert.equal(x.data.disconnected,true);
+x=await call('/api/broker/deriv',undefined,{Cookie:''});assert.equal(x.r.status,400);
+console.log('Passed local route tests: CSRF, PKCE URL, callback rejection, real session rejection, MT5 pairing/account binding/revocation and real-account automation lock.');

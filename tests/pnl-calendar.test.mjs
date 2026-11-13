@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {calendarTrades,calendarMonth,shiftMonth,watDay} from '../lib/pnl-calendar.ts';
+import {closePaper} from '../lib/desk.ts';
+const trade=(id,date,pnl,market='Forex',status='closed')=>({id,closedAt:Date.parse(date),pnl,market,status});
+const rows=[trade('a','2026-10-01T22:59:59Z',12),trade('b','2026-10-01T23:00:00Z',-25),trade('c','2026-10-02T10:00:00Z',5,'Futures'),trade('d','2026-10-02T10:00:00Z',0),trade('open','2026-10-02T10:00:00Z',100,'Forex','open'),trade('bad','invalid',9),trade('badp','2026-10-02T10:00:00Z',NaN),trade('nov','2026-10-31T23:00:00Z',42)];
+assert.equal(watDay(Date.parse('2026-10-01T23:00:00Z')),'2026-10-02');
+const x=calendarTrades(rows,'2026-10');assert.equal(x.net,-8);assert.equal(x.count,4);assert.equal(x.wins,2);assert.equal(x.losses,1);assert.equal(x.flat,1);assert.equal(x.excluded,2);assert.equal(x.days.get('2026-10-02').length,3);
+assert.equal(calendarTrades(rows,'2026-10','Futures').net,5);assert.equal(calendarTrades(rows,'2026-11').net,42);assert.equal(calendarTrades(rows,'2025-01').count,0);
+assert.equal(calendarMonth('2024-02').days.length,29);assert.equal(calendarMonth('2026-02').days.length,28);assert.equal(calendarMonth('2026-10').offset,3);assert.equal(shiftMonth('2026-12',1),'2027-01');assert.equal(shiftMonth('2026-01',-1),'2025-12');
+const t={id:'t',side:'BUY',status:'open',entry:100,qty:2,fee:.2};const desk={balance:9999.8,trades:[t]};
+assert.equal(closePaper(desk,'t',110,'target').trades[0].closeReason,'target');assert.equal(closePaper(desk,'t',90,'stop').trades[0].closeReason,'stop');assert.equal(closePaper(desk,'t',101).trades[0].closeReason,'manual');
+console.log('Passed calendar WAT midnight, month/year boundaries, leap years, market filter, fees-preserving net totals, open/invalid exclusions and exit reasons.');

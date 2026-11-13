@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {practiceMark} from '../lib/practice-pnl.ts';
+const t={entry:100,qty:2,fee:.2,side:'BUY'};
+assert.ok(Math.abs(practiceMark(t,110,100000,100000).net-19.58)<1e-10);
+assert.ok(Math.abs(practiceMark({...t,side:'SELL'},90,100000,100000).net-19.62)<1e-10);
+assert.equal(practiceMark(t,100,100000,100000).net,-.4);
+assert.equal(practiceMark(t,110,1,100000),null);
+assert.equal(practiceMark(t,NaN,100000,100000),null);
+assert.equal(practiceMark(t,110,200000,100000),null);
+console.log('Passed long/short mark-to-market, both fees, stale and invalid price exclusions.');

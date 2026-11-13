@@ -1,0 +1,7 @@
+import assert from 'node:assert/strict';
+import {mt5Snapshot} from '../lib/mt5-snapshot.ts';
+const base={login:'123',server:'Demo',mode:'demo',balance:10000,equity:10005,marginFree:9990,positions:1,currency:'USD',symbol:'EURUSD',status:'Monitoring'};
+const position={ticket:'9007199254740995',symbol:'EURUSD',side:'BUY',volume:.1,entry:1.1,current:1.11,stop:1.09,target:1.12,profit:5,swap:-.2,openedAt:1700000000000,comment:'Demo test'};
+const deal={ticket:'9007199254740996',symbol:'EURUSD',side:'SELL',entryType:'OUT',profit:10,commission:-1,swap:-.5,fee:-.1,time:1700000000000,volume:.1,price:1.11};
+const full={...base,version:'1.10',openPositions:[position],positionsComplete:true,brokerDay:'2026-10-02',historyComplete:true,deals:[deal]};
+assert.equal(mt5Snapshot(base).version,'1.00');const parsed=mt5Snapshot(full);assert.equal(parsed.openPositions[0].ticket,position.ticket);assert.equal(parsed.dailyNet,8.4);assert.equal(mt5Snapshot({...full,mode:'real'}).mode,'real');assert.throws(()=>mt5Snapshot({...full,openPositions:[position,position]}));assert.throws(()=>mt5Snapshot({...full,openPositions:[]}));assert.throws(()=>mt5Snapshot({...full,deals:[deal,{...deal}]}));assert.throws(()=>mt5Snapshot({...full,openPositions:[{...position,profit:Infinity}]}));assert.equal(mt5Snapshot({...full,historyComplete:false}).historyComplete,false);console.log('Passed: precise ticket IDs, fee accounting, old bridge compatibility, duplicate/malformed report rejection and incomplete history.');

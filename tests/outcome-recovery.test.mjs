@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {outcomeHistoryEnd,evaluateSignal} from '../lib/signal-outcomes.ts';
+import {signalResultView} from '../lib/signal-result-view.ts';
+import {monitorSummary} from '../lib/monitor-summary.ts';
+const now=Date.parse('2026-10-03T12:00:00Z'),cursor=Date.parse('2026-10-02T10:00:00Z')/1000;
+assert.equal(outcomeHistoryEnd(cursor,now),cursor+199*60);
+assert.equal(outcomeHistoryEnd(now/1000-60,now),now/1000-1);
+assert.throws(()=>outcomeHistoryEnd(NaN,now));
+const s={side:'BUY',entry:100,stop:90,target:120};
+const candles=Array.from({length:200},(_,i)=>({time:cursor+i*60,open:100,high:105,low:95,close:101}));
+const a=evaluateSignal(s,cursor,candles,now);assert.equal(a.status,'pending');assert.equal(a.cursor,cursor+200*60);
+const hit=evaluateSignal(s,a.cursor,[{time:a.cursor,open:101,high:121,low:99,close:120}],now);assert.equal(hit.status,'target_hit');
+assert.equal(signalResultView({delivery:'sent',status:'pending',result:{checkedAt:now,cursor:a.cursor}},now).label,'Catching up history');
+assert.equal(monitorSummary({enabled:true,lastScan:now,lastResult:{checked:0,state:'failed'}},now).title,'Market data unavailable');
+assert.equal(monitorSummary({enabled:true,lastScan:now-100*60000,lastResult:{checked:3,state:'complete'}},now).title,'Scheduled check overdue');
+assert.equal(monitorSummary({enabled:false},now).title,'Automatic alerts paused');
+assert.equal(monitorSummary({enabled:true,lastScan:now,lastResult:{checked:4,sent:0,state:'complete'}},now).title,'Latest scan completed');
+console.log('Passed: outage recovery window, cursor progress, historical hits, catching-up label and honest monitor states.');

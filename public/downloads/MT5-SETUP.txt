@@ -1,0 +1,50 @@
+DUAL DESK — WINDOWS MT5 SETUP
+
+Your Deriv website sign-in and your MT5 terminal are separate connections.
+Install this on the Windows computer where you run Deriv MT5.
+On your phone, open Dual Desk and sign in with the same ChatGPT account.
+The phone needs no bridge installation or separate pairing key. Windows and
+MT5 must stay running to keep the reports current.
+
+1. Open MT5 and sign in to your Deriv DEMO MT5 account for testing.
+2. On Dual Desk, sign in and open Accounts & bots > Windows MT5 setup.
+   Download DualDeskBridge.mq5 and click Create pairing key.
+   Keep the pairing key private. It connects this terminal to your website account.
+3. In MT5: File > Open Data Folder > MQL5 > Experts.
+   Copy DualDeskBridge.mq5 into that Experts folder.
+4. Press F4 in MT5 to open MetaEditor. Open the copied file, then press F7.
+   Compilation must show 0 errors. If there are errors, copy their text for support.
+5. Back in MT5: Tools > Options > Expert Advisors.
+   Enable WebRequest for the URL below and add it exactly:
+   https://dual-desk-trading.ayomideaminu.chatgpt.site
+6. In Navigator > Expert Advisors, refresh the list. Drag DualDeskBridge
+   onto ONE chart. In Inputs, paste the pairing key into PairingKey.
+   Leave AllowDemoAutomation=false for the first connection test.
+7. Keep MT5 open. Refresh Dual Desk. Windows MT5 should show Terminal online
+   with your account balance and equity within about 15 seconds.
+
+AUTOMATION IS A SEPARATE STEP
+After the bridge compiles and the account connection is checked, demo automation
+requires all three: MT5 Algo Trading enabled, AllowDemoAutomation=true in the EA,
+and Enable MT5 demo bot on the website. The strategy is unvalidated.
+Real accounts are view-only; the bridge refuses real-money orders.
+Your computer and MT5 must remain running for the bridge to work.
+Bridge 1.10 reports today’s trading deals; earlier history is not imported.
+
+BRIDGE 1.10: POSITION AND PROFIT REPORTS
+After pairing, open Active trades & P&L on the site. The MT5 section shows
+individual positions and today's trading deals in your broker currency.
+Reports become stale when Windows/MT5 stops. The day uses your broker's clock.
+Up to 50 positions and 500 trading deals per day are reported. An incomplete
+report is labelled; no full-day total is claimed. Separate balance adjustments
+are excluded. Real accounts are monitoring-only; real orders remain disabled.
+
+TROUBLESHOOTING
+- HTTP -1 / MT5 4014: check the WebRequest URL and run this as an Expert Advisor
+  on a normal chart, not an indicator or in Strategy Tester.
+- HTTP 401: check PairingKey. If you replaced the key, paste the newest key.
+- Offline after 45 seconds: check internet, MT5, and Windows sleep settings.
+- Compilation errors: save the exact MetaEditor error text for review. This
+  source has not been compiled or tested on your Windows terminal yet.
+- Leave AllowDemoAutomation=false until reports and symbol details are checked.
+- Do not paste your account password, wallet seed phrase or private key here.

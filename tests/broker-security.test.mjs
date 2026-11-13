@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {randomSecret,digest,seal,unseal,sameOrigin,demoSocket,parseAccounts} from '../lib/broker-security.ts';
+const secret='a'.repeat(64),plain='private-broker-token';
+const a=await seal(plain,secret,'alice'),b=await seal(plain,secret,'alice');
+assert.notEqual(a,b);assert(!a.includes(plain));assert.equal(await unseal(a,secret,'alice'),plain);
+await assert.rejects(unseal(a,secret,'bob'));await assert.rejects(unseal(a,'b'.repeat(64),'alice'));
+assert.match(randomSecret(),/^[\w-]{43}$/);assert.equal((await digest('test')).length,43);
+assert.throws(()=>sameOrigin(new Request('https://desk.test/api',{method:'POST'})));
+assert.throws(()=>sameOrigin(new Request('https://desk.test/api',{method:'POST',headers:{origin:'https://evil.test'}})));
+sameOrigin(new Request('https://desk.test/api',{method:'POST',headers:{origin:'https://desk.test'}}));
+assert.equal(demoSocket('wss://api.derivws.com/trading/v1/options/ws/demo?otp=test'),'wss://api.derivws.com/trading/v1/options/ws/demo?otp=test');
+for(const url of ['wss://api.derivws.com/trading/v1/options/ws/real?otp=test','wss://evil.test/trading/v1/options/ws/demo','https://api.derivws.com/trading/v1/options/ws/demo','wss://user:pass@api.derivws.com/trading/v1/options/ws/demo'])assert.throws(()=>demoSocket(url));
+assert.equal(parseAccounts({data:[{account_id:'DOT1',account_type:'unknown',balance:1,currency:'USD'}]})[0].type,'unknown');
+const rows=parseAccounts({data:[{account_id:'DOT1',account_type:'demo',balance:10000,currency:'USD',status:'active'},{account_id:'ROT1',account_type:'real',balance:12,currency:'USD',status:'active'}]});assert.equal(rows[0].type,'demo');assert.equal(rows[1].type,'real');
+console.log('Passed: encrypted token isolation/tamper protection, CSRF checks, account classification and rejection of real/foreign WebSocket URLs.');
+
+const sample={account_id:'DOT2',account_type:'demo',balance:'10000.25',currency:'USD',status:'active'};
+for(const response of [{data:[sample]},{data:{accounts:[sample]}},{accounts:[sample]},[sample]])assert.equal(parseAccounts(response)[0].balance,10000.25);
+for(const balance of [null,undefined,'',true,'NaN','Infinity','0x10',{},'100 USD'])assert.equal(parseAccounts({data:[{...sample,balance}]})[0].balance,null);
+assert.equal(parseAccounts({data:[{account_id:'DOT3'}]})[0].type,'unknown');
+assert.equal(parseAccounts({data:[{...sample,account_type:'real'}]})[0].type,'real');
+assert.throws(()=>parseAccounts({data:[{...sample,account_id:'../../real'}]}));
+assert.throws(()=>parseAccounts({data:[sample,sample]}));
+assert.throws(()=>parseAccounts({errors:[{message:'failure'}]}));
+assert.deepEqual(parseAccounts({data:[]}),[]);
+console.log('Passed account compatibility: decimal strings, list envelopes, missing metadata, explicit real/demo classification, malformed IDs and unknown responses.');

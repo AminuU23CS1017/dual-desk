@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const out=await build({entryPoints:['lib/okx-feed.ts'],bundle:true,platform:'node',format:'esm',write:false});const {okxFutures}=await import('data:text/javascript;base64,'+Buffer.from(out.outputFiles[0].text).toString('base64'));
+const now=Date.now(),urls=[];
+const get=async url=>{urls.push(url);return url.includes('/ticker?')?{code:'0',data:[{last:'101',ts:String(now)}]}:{code:'0',data:[[String(now-60000),'100','102','99','101'],[String(now-120000),'99','101','98','100']]}};
+const result=await okxFutures(get,'BTCUSDT',60);assert.equal(result.source,'OKX');assert.equal(result.asOf,now);assert.equal(result.candles[0].open,99);assert(urls[0].includes('BTC-USDT-SWAP&bar=1H'));urls.length=0;
+await okxFutures(get,'ETHUSDT',1440,10000);assert(urls[0].includes('history-candles?instId=ETH-USDT-SWAP&bar=1Dutc'));assert(urls[0].endsWith('after=10000000'));
+await assert.rejects(okxFutures(async()=>({code:'0',data:[]}), 'BTCUSDT',15),/Invalid/);
+await assert.rejects(okxFutures(async url=>url.includes('ticker?')?{code:'0',data:[{last:101,ts:now-300000}]}:get(url),'BTCUSDT',15),/stale/);
+await assert.rejects(okxFutures(get,'BTCUSDT&other=1',15),/Unsupported/);
+console.log('Passed OKX swap identity, candle ordering, UTC daily/history paging and invalid/stale feed rejection.');

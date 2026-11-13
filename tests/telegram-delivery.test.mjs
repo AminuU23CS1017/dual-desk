@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {build} from 'esbuild';
+const sqlite=new DatabaseSync(':memory:');
+sqlite.exec("CREATE TABLE alert_deliveries(id TEXT PRIMARY KEY,created_at INTEGER,status TEXT,payload TEXT,attempts INTEGER DEFAULT 0,retry_at INTEGER DEFAULT 0,error_code TEXT);CREATE TABLE signal_results(id TEXT PRIMARY KEY,user_id TEXT,signal TEXT,status TEXT,started_at INTEGER,cursor INTEGER,result TEXT);");
+globalThis.deliveryTestDb={prepare(sql){const statement=sqlite.prepare(sql);return {bind(...args){return {async run(){return {meta:{changes:Number(statement.run(...args).changes)}}},async first(){return statement.get(...args)??null},async all(){return {results:statement.all(...args)}}}}}}};
+const bundle=await build({entryPoints:['lib/telegram-delivery.ts'],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'test-dependencies',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'mock'}));b.onResolve({filter:/^\.\/server$/},()=>({path:'db',namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:args.path==='env'?"export const env={TELEGRAM_BOT_TOKEN:'local-test-only',TELEGRAM_CHAT_ID:'local-test-only'}":"export const db=()=>globalThis.deliveryTestDb"}));}}]});
+const api=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const original=globalThis.fetch;let calls=0,mode='sent';let sentBody;globalThis.fetch=async(url,options)=>{sentBody=JSON.parse(options.body);calls++;if(mode==='timeout')throw Error('lost response');return {status:mode==='rate'?429:200,json:async()=>mode==='rate'?{ok:false,error_code:429,parameters:{retry_after:1}}:{ok:true}}};
+try{
+ await Promise.all([api.deliver('same','sample'),api.deliver('same','sample')]);assert.equal(calls,1);assert.equal(sqlite.prepare("SELECT status FROM alert_deliveries WHERE id='same'").get().status,'sent');
+ mode='rate';assert.equal(await api.deliver('rate','sample'),'retry_wait');assert.equal(calls,2);assert.equal(await api.deliver('rate','sample'),'retry_wait');assert.equal(calls,2);
+ sqlite.prepare("UPDATE alert_deliveries SET retry_at=0 WHERE id='rate'").run();mode='sent';await Promise.all([api.deliver('rate','sample'),api.deliver('rate','sample')]);assert.equal(calls,3);assert.equal(sqlite.prepare("SELECT attempts FROM alert_deliveries WHERE id='rate'").get().attempts,2);
+ mode='timeout';assert.equal(await api.deliver('lost','sample'),'uncertain');await api.deliver('lost','sample');assert.equal(calls,4);
+ const expired={time:1,timeframe:15};sqlite.prepare("INSERT INTO alert_deliveries VALUES(?,0,'retry_wait','stale',1,0,NULL)").run('signal:alice:old');sqlite.prepare("INSERT INTO signal_results VALUES(?,'alice',?,'pending',0,0,'{}')").run('signal:alice:old',JSON.stringify(expired));await api.retryTelegram('alice');assert.equal(calls,4);assert.equal(sqlite.prepare("SELECT status FROM alert_deliveries WHERE id='signal:alice:old'").get().status,'expired');
+ mode='sent';const signal={id:'v2:15:Forex:frxEURUSD:123:BUY',market:'Forex',symbol:'frxEURUSD',side:'BUY',entry:1.1,stop:1,target:1.3,time:Date.now(),reason:'Test',timeframe:15};await api.deliverSignal('alice',signal);assert(sentBody.text.includes('view=results&signal='+encodeURIComponent(signal.id)));assert(!sentBody.text.includes('alice'));
+ console.log('Passed: atomic deduplication, bounded retries, uncertain-send suppression and stale signal expiry; no Telegram messages sent.');
+}finally{globalThis.fetch=original;sqlite.close();delete globalThis.deliveryTestDb}

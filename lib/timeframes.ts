@@ -1,0 +1,4 @@
+export const TIMEFRAMES=[{minutes:1,label:'1m'},{minutes:5,label:'5m'},{minutes:15,label:'15m'},{minutes:30,label:'30m'},{minutes:60,label:'1h'},{minutes:240,label:'4h'},{minutes:1440,label:'1D'}];
+export function validTimeframe(value:unknown){const n=Number(value??15);if(!TIMEFRAMES.some(t=>t.minutes===n))throw Error('Unsupported timeframe.');return n;}
+export const timeframeLabel=(n:number)=>TIMEFRAMES.find(t=>t.minutes===n)?.label??`${n}m`;
+export function aggregateCandles<T extends {time:number;open:number;high:number;low:number;close:number}>(rows:T[],seconds:number){const result:T[]=[];for(const c of rows){const time=Math.floor(c.time/seconds)*seconds;const last=result.at(-1);if(last?.time===time){last.high=Math.max(last.high,c.high);last.low=Math.min(last.low,c.low);last.close=c.close;}else result.push({...c,time})}return result;}

@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {evaluateSignal} from '../lib/signal-outcomes.ts';
+const s={side:'BUY',entry:100,stop:90,target:120},b=(time,open,high,low,close)=>({time,open,high,low,close});
+assert.equal(evaluateSignal(s,60,[b(0,100,130,80,100),b(60,100,110,95,105)],180000).status,'pending');
+assert.equal(evaluateSignal(s,60,[b(60,100,121,99,120)],180000).status,'target_hit');
+assert.equal(evaluateSignal(s,60,[b(60,100,121,89,100)],180000).status,'ambiguous');
+assert.equal(evaluateSignal(s,60,[b(120,100,121,99,120)],240000).status,'data_gap');
+assert.equal(evaluateSignal(s,60,[b(60,100,121,99,120)],100000).status,'pending');
+assert.equal(evaluateSignal(s,60,[b(60,80,89,75,85)],180000).exit,80);
+assert.equal(evaluateSignal({...s,side:'SELL',stop:110,target:80},60,[b(60,100,105,79,80)],180000).status,'target_hit');
+assert.equal(evaluateSignal(s,60,[b(60,100,121,99,120)],180000).rMultiple,2);
+console.log('Passed: post-signal timing, incomplete candles, ambiguous hits, missing candles, gaps, shorts and R-multiple.');
+
+import {signalResultView,signalResultCounts} from '../lib/signal-result-view.ts';
+assert.deepEqual(evaluateSignal(s,60,[b(60,100,121,99,120)],180000).evidence,b(60,100,121,99,120));
+assert.equal(signalResultView({delivery:'sent',status:'pending',result:{}}).label,'Awaiting price check');
+assert.equal(signalResultView({delivery:'sent',status:'pending',result:{checkedAt:1}},6000000).label,'Update overdue');
+assert.equal(signalResultView({delivery:'unknown',status:'stop_hit'}).label,'Not confirmed sent');
+for(const status of ['ambiguous','data_gap'])assert.equal(signalResultView({delivery:'sent',status}).label,'Unable to verify');
+assert.deepEqual(signalResultCounts([{delivery:'sent',status:'target_hit'},{delivery:'sent',status:'stop_hit'},{delivery:'sent',status:'data_gap'},{delivery:'sent',status:'ambiguous'},{delivery:'unknown',status:'stop_hit'}]),{targets:1,stops:1,unresolved:2,resolved:2});
+console.log('Passed: evidence retained, stale/missing checks and uncertain deliveries excluded from win/loss statistics.');
